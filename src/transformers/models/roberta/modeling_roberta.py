@@ -221,9 +221,13 @@ class RobertaSelfAttention(nn.Module):
         self.do_lora = config.do_lora
         if self.do_lora:
             self.lora_q_a = nn.Linear(config.hidden_size, config.lora_r)
+            nn.init.normal_(self.lora_q_a.weight)
             self.lora_q_b = nn.Linear(config.lora_r, config.hidden_size)
+            nn.init.zeros_(self.lora_q_b.weight)
             self.lora_v_a = nn.Linear(config.hidden_size, config.lora_r)
+            nn.init.normal_(self.lora_q_a.weight)
             self.lora_v_b = nn.Linear(config.lora_r, config.hidden_size)
+            nn.init.zeros_(self.lora_v_b.weight)
             self.lora_r = config.lora_r
             self.lora_alpha = config.lora_alpha
         else:
