@@ -722,7 +722,7 @@ class RobertaPreTrainedModel(PreTrainedModel):
                 _a = j
             if ".lora_q_b.weight" in i:
                 _b = j
-                _q.data += _b.data @ _a.data
+                _q.data += (_b.data @ _a.data) * (self.lora_alpha / self.lora_r)
 
             if ".value.weight" in i:
                 _v = j
@@ -730,7 +730,7 @@ class RobertaPreTrainedModel(PreTrainedModel):
                 _a = j
             if ".lora_v_b.weight" in i:
                 _b = j
-                _v.data += _b.data @ _a.data
+                _v.data += (_b.data @ _a.data) * (self.lora_alpha / self.lora_r)
         self._init_lora()
 
     def _set_gradient_checkpointing(self, module, value=False):
