@@ -86,10 +86,7 @@ class DataTrainingArguments:
 
     task_name: Optional[str] = field(
         default=None,
-        metadata={
-            "help": "The name of the task to train on: "
-            + ", ".join(task_to_keys.keys())
-        },
+        metadata={"help": "The name of the task to train on: " + ", ".join(task_to_keys.keys())},
     )
     dataset_name: Optional[str] = field(
         default=None,
@@ -165,8 +162,7 @@ class DataTrainingArguments:
             self.task_name = self.task_name.lower()
             if self.task_name not in task_to_keys.keys():
                 raise ValueError(
-                    "Unknown task, you should pick one in "
-                    + ",".join(task_to_keys.keys())
+                    "Unknown task, you should pick one in " + ",".join(task_to_keys.keys())
                 )
         elif self.dataset_name is not None:
             pass
@@ -193,21 +189,15 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        metadata={
-            "help": "Path to pretrained model or model identifier from huggingface.co/models"
-        }
+        metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
     )
     config_name: Optional[str] = field(
         default=None,
-        metadata={
-            "help": "Pretrained config name or path if not the same as model_name"
-        },
+        metadata={"help": "Pretrained config name or path if not the same as model_name"},
     )
     tokenizer_name: Optional[str] = field(
         default=None,
-        metadata={
-            "help": "Pretrained tokenizer name or path if not the same as model_name"
-        },
+        metadata={"help": "Pretrained tokenizer name or path if not the same as model_name"},
     )
     cache_dir: Optional[str] = field(
         default=None,
@@ -242,9 +232,7 @@ class ModelArguments:
             "help": "Will enable to load a pretrained model whose head dimensions are different."
         },
     )
-    do_lora: bool = field(
-        default=False, metadata={"help": "wheter to fine tune with lora"}
-    )
+    do_lora: bool = field(default=False, metadata={"help": "wheter to fine tune with lora"})
     lora_r: int = field(default=8, metadata={"help": "Lora r param."})
     lora_alpha: int = field(default=8, metadata={"help": "Lora alpha param."})
     relora_epoch: int = field(default=-1, metadata={"help": "lora reset epoch."})
@@ -261,10 +249,11 @@ class ReloraCallback(TrainerCallback):
     ):
         if args.relora_epoch < 0:
             return
+
         if (state.epoch > 0) and (int(state.epoch) % args.relora_epoch == 0):
             print("####################################", state.epoch)
             model._re_init_lora()
-            assert (next(j for i,j in model.named_parameters() if "lora_v_b" in i ) == 0).all()
+            assert (next(j for i, j in model.named_parameters() if "lora_v_b" in i) == 0).all()
 
 
 def main():
@@ -272,9 +261,7 @@ def main():
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
 
-    parser = HfArgumentParser(
-        (ModelArguments, DataTrainingArguments, TrainingArguments)
-    )
+    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments))
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         # If we pass only one argument to the script and it's the path to a json file,
         # let's parse it to get our arguments.
@@ -326,9 +313,7 @@ def main():
                 f"Output directory ({training_args.output_dir}) already exists and is not empty. "
                 "Use --overwrite_output_dir to overcome."
             )
-        elif (
-            last_checkpoint is not None and training_args.resume_from_checkpoint is None
-        ):
+        elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
             logger.info(
                 f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
                 "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
@@ -384,9 +369,7 @@ def main():
                 ), "`test_file` should have the same extension (csv or json) as `train_file`."
                 data_files["test"] = data_args.test_file
             else:
-                raise ValueError(
-                    "Need either a GLUE task or a test file for `do_predict`."
-                )
+                raise ValueError("Need either a GLUE task or a test file for `do_predict`.")
 
         for key in data_files.keys():
             logger.info(f"load a local file for {key}: {data_files[key]}")
@@ -438,9 +421,7 @@ def main():
     # In distributed training, the .from_pretrained methods guarantee that only one local process can concurrently
     # download model & vocab.
     config = AutoConfig.from_pretrained(
-        model_args.config_name
-        if model_args.config_name
-        else model_args.model_name_or_path,
+        model_args.config_name if model_args.config_name else model_args.model_name_or_path,
         num_labels=num_labels,
         finetuning_task=data_args.task_name,
         cache_dir=model_args.cache_dir,
@@ -454,9 +435,7 @@ def main():
     config.relora_epoch = model_args.relora_epoch
 
     tokenizer = AutoTokenizer.from_pretrained(
-        model_args.tokenizer_name
-        if model_args.tokenizer_name
-        else model_args.model_name_or_path,
+        model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
         cache_dir=model_args.cache_dir,
         use_fast=model_args.use_fast_tokenizer,
         revision=model_args.model_revision,
@@ -476,10 +455,7 @@ def main():
     if model_args.do_lora:
         model._init_lora()
 
-    assert (
-        len([i for i, j in model.named_parameters() if "lora" in i and "bias" not in i])
-        > 0
-    )
+        assert len([i for i, j in model.named_parameters() if "lora" in i and "bias" not in i]) > 0
 
     # Preprocessing the raw_datasets
     if data_args.task_name is not None:
@@ -489,10 +465,7 @@ def main():
         non_label_column_names = [
             name for name in raw_datasets["train"].column_names if name != "label"
         ]
-        if (
-            "sentence1" in non_label_column_names
-            and "sentence2" in non_label_column_names
-        ):
+        if "sentence1" in non_label_column_names and "sentence2" in non_label_column_names:
             sentence1_key, sentence2_key = "sentence1", "sentence2"
         else:
             if len(non_label_column_names) >= 2:
@@ -517,9 +490,7 @@ def main():
         # Some have all caps in their config, some don't.
         label_name_to_id = {k.lower(): v for k, v in model.config.label2id.items()}
         if sorted(label_name_to_id.keys()) == sorted(label_list):
-            label_to_id = {
-                i: int(label_name_to_id[label_list[i]]) for i in range(num_labels)
-            }
+            label_to_id = {i: int(label_name_to_id[label_list[i]]) for i in range(num_labels)}
         else:
             logger.warning(
                 "Your model seems to have been trained with labels, but they don't match the dataset: ",
@@ -550,15 +521,11 @@ def main():
             if sentence2_key is None
             else (examples[sentence1_key], examples[sentence2_key])
         )
-        result = tokenizer(
-            *args, padding=padding, max_length=max_seq_length, truncation=True
-        )
+        result = tokenizer(*args, padding=padding, max_length=max_seq_length, truncation=True)
 
         # Map labels to IDs (not necessary for GLUE tasks)
         if label_to_id is not None and "label" in examples:
-            result["label"] = [
-                (label_to_id[l] if l != -1 else -1) for l in examples["label"]
-            ]
+            result["label"] = [(label_to_id[l] if l != -1 else -1) for l in examples["label"]]
         return result
 
     with training_args.main_process_first(desc="dataset map pre-processing"):
@@ -577,10 +544,7 @@ def main():
             train_dataset = train_dataset.select(range(max_train_samples))
 
     if training_args.do_eval:
-        if (
-            "validation" not in raw_datasets
-            and "validation_matched" not in raw_datasets
-        ):
+        if "validation" not in raw_datasets and "validation_matched" not in raw_datasets:
             raise ValueError("--do_eval requires a validation dataset")
         eval_dataset = raw_datasets[
             "validation_matched" if data_args.task_name == "mnli" else "validation"
@@ -596,13 +560,9 @@ def main():
     ):
         if "test" not in raw_datasets and "test_matched" not in raw_datasets:
             raise ValueError("--do_predict requires a test dataset")
-        predict_dataset = raw_datasets[
-            "test_matched" if data_args.task_name == "mnli" else "test"
-        ]
+        predict_dataset = raw_datasets["test_matched" if data_args.task_name == "mnli" else "test"]
         if data_args.max_predict_samples is not None:
-            max_predict_samples = min(
-                len(predict_dataset), data_args.max_predict_samples
-            )
+            max_predict_samples = min(len(predict_dataset), data_args.max_predict_samples)
             predict_dataset = predict_dataset.select(range(max_predict_samples))
 
     # Log a few random samples from the training set:
@@ -638,16 +598,13 @@ def main():
         data_collator = None
 
     optimizers = (None, None)
+    training_args.relora_epoch = model_args.relora_epoch
     if model_args.do_lora:
         optimizer_params = (
-            j
-            for i, j in model.named_parameters()
-            if ("lora" in i) and ("bias" not in i)
+            j for i, j in model.named_parameters() if ("lora" in i) and ("bias" not in i)
         )
         optimizer = AdamW(optimizer_params, lr=training_args.learning_rate)
         optimizers = (optimizer, None)
-
-        training_args.relora_epoch = model_args.relora_epoch
 
     # Initialize our Trainer
     trainer = Trainer(
@@ -695,9 +652,7 @@ def main():
             tasks.append("mnli-mm")
             valid_mm_dataset = raw_datasets["validation_mismatched"]
             if data_args.max_eval_samples is not None:
-                max_eval_samples = min(
-                    len(valid_mm_dataset), data_args.max_eval_samples
-                )
+                max_eval_samples = min(len(valid_mm_dataset), data_args.max_eval_samples)
                 valid_mm_dataset = valid_mm_dataset.select(range(max_eval_samples))
             eval_datasets.append(valid_mm_dataset)
             combined = {}
@@ -735,13 +690,9 @@ def main():
         for predict_dataset, task in zip(predict_datasets, tasks):
             # Removing the `label` columns because it contains -1 and Trainer won't like that.
             predict_dataset = predict_dataset.remove_columns("label")
-            predictions = trainer.predict(
-                predict_dataset, metric_key_prefix="predict"
-            ).predictions
+            predictions = trainer.predict(predict_dataset, metric_key_prefix="predict").predictions
             predictions = (
-                np.squeeze(predictions)
-                if is_regression
-                else np.argmax(predictions, axis=1)
+                np.squeeze(predictions) if is_regression else np.argmax(predictions, axis=1)
             )
 
             output_predict_file = os.path.join(

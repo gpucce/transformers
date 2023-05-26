@@ -244,13 +244,13 @@ class RobertaSelfAttention(nn.Module):
         past_key_value: Optional[Tuple[Tuple[torch.FloatTensor]]] = None,
         output_attentions: Optional[bool] = False,
     ) -> Tuple[torch.Tensor]:
-        _query_in = hidden_states @ self.query.weight.T
+        _query_in = self.query(hidden_states)
         if self.do_lora:
             lora_query_in = self.lora_q_a(hidden_states)
             lora_query_in = self.lora_q_b(lora_query_in)
             lora_query_in = lora_query_in * (self.lora_alpha / self.lora_r)
             _query_in = _query_in + lora_query_in
-        mixed_query_layer = _query_in + self.query.bias
+        mixed_query_layer = _query_in
 
         # If this is instantiated as a cross-attention module, the keys
         # and values come from an encoder; the attention mask needs to be
@@ -274,13 +274,12 @@ class RobertaSelfAttention(nn.Module):
         else:
             key_layer = self.transpose_for_scores(self.key(hidden_states))
 
-            _value_in = hidden_states @ self.value.weight.T
+            _value_in = self.value(hidden_states)
             if self.do_lora:
                 lora_value_in = self.lora_v_a(hidden_states)
                 lora_value_in = self.lora_v_b(lora_value_in)
                 lora_value_in = lora_value_in * (self.lora_alpha / self.lora_r)
                 _value_in = _value_in + lora_value_in
-            _value_in = _value_in + self.value.bias
             value_layer = self.transpose_for_scores(_value_in)
 
         query_layer = self.transpose_for_scores(mixed_query_layer)
