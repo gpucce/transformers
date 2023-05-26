@@ -42,8 +42,11 @@ from transformers import (
     default_data_collator,
     set_seed,
     AdamW,
+    TrainerCallback,
 )
+from transformers.trainer_callback import TrainerControl, TrainerState
 from transformers.trainer_utils import get_last_checkpoint
+from transformers.training_args import TrainingArguments
 from transformers.utils import check_min_version, send_example_telemetry
 from transformers.utils.versions import require_version
 
@@ -244,6 +247,24 @@ class ModelArguments:
     )
     lora_r: int = field(default=8, metadata={"help": "Lora r param."})
     lora_alpha: int = field(default=8, metadata={"help": "Lora alpha param."})
+    relora_epoch: int = field(default=-1, metadata={"help": "lora reset epoch."})
+
+
+class ReloraCallback(TrainerCallback):
+    def on_epoch_end(
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        model=None,
+        **kwargs,
+    ):
+        if args.relora_epoch < 0:
+            return
+        if (state.epoch > 0) and (int(state.epoch) % args.relora_epoch == 0):
+            print("####################################", state.epoch)
+            model._re_init_lora()
+            assert (next(j for i,j in model.named_parameters() if "lora_v_b" in i ) == 0).all()
 
 
 def main():
@@ -430,6 +451,7 @@ def main():
     config.do_lora = model_args.do_lora
     config.lora_r = model_args.lora_r
     config.lora_alpha = model_args.lora_alpha
+    config.relora_epoch = model_args.relora_epoch
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.tokenizer_name
@@ -450,6 +472,9 @@ def main():
         use_auth_token=True if model_args.use_auth_token else None,
         ignore_mismatched_sizes=model_args.ignore_mismatched_sizes,
     )
+
+    if model_args.do_lora:
+        model._init_lora()
 
     assert (
         len([i for i, j in model.named_parameters() if "lora" in i and "bias" not in i])
@@ -615,13 +640,14 @@ def main():
     optimizers = (None, None)
     if model_args.do_lora:
         optimizer_params = (
-            j for i, j in model.named_parameters() if "lora" in i and "bias" not in i
+            j
+            for i, j in model.named_parameters()
+            if ("lora" in i) and ("bias" not in i)
         )
         optimizer = AdamW(optimizer_params, lr=training_args.learning_rate)
         optimizers = (optimizer, None)
-        for i, j in model.named_parameters():
-            if "lora" not in i:
-                j.requires_grad = False
+
+        training_args.relora_epoch = model_args.relora_epoch
 
     # Initialize our Trainer
     trainer = Trainer(
@@ -633,6 +659,7 @@ def main():
         tokenizer=tokenizer,
         data_collator=data_collator,
         optimizers=optimizers,
+        callbacks=[ReloraCallback()],
     )
 
     # Training
