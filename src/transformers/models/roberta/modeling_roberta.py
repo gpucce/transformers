@@ -218,6 +218,7 @@ class RobertaSelfAttention(nn.Module):
             self.lora_v_b = nn.Linear(config.lora_r, config.hidden_size, bias=False)
             self.lora_r = config.lora_r
             self.lora_alpha = config.lora_alpha
+            self.lora_dropout = nn.Dropout(0.1)
         else:
             self.lora_q_a = None
             self.lora_q_b = None
@@ -246,7 +247,7 @@ class RobertaSelfAttention(nn.Module):
     ) -> Tuple[torch.Tensor]:
         _query_in = self.query(hidden_states)
         if self.do_lora:
-            lora_query_in = self.lora_q_a(hidden_states)
+            lora_query_in = self.lora_q_a(self.lora_dropout(hidden_states))
             lora_query_in = self.lora_q_b(lora_query_in)
             lora_query_in = lora_query_in * (self.lora_alpha / self.lora_r)
             _query_in = _query_in + lora_query_in
@@ -276,7 +277,7 @@ class RobertaSelfAttention(nn.Module):
 
             _value_in = self.value(hidden_states)
             if self.do_lora:
-                lora_value_in = self.lora_v_a(hidden_states)
+                lora_value_in = self.lora_v_a(self.lora_dropout(hidden_states))
                 lora_value_in = self.lora_v_b(lora_value_in)
                 lora_value_in = lora_value_in * (self.lora_alpha / self.lora_r)
                 _value_in = _value_in + lora_value_in
@@ -708,9 +709,9 @@ class RobertaPreTrainedModel(PreTrainedModel):
 
     def _init_lora(self, std=1.0):
         for i, j in self.named_parameters():
-            if "lora" in i and "_b" in i and "bias" not in i:
+            if "lora_q_b" in i or "lora_v_b" in i:
                 j.data.zero_()
-            if "lora" in i and "_a" in i and "bias" not in i:
+            if "lora_q_a" in i or "lora_v_a" in i:
                 j.data.normal_(std=std)
 
     def _re_init_lora(self):
@@ -721,7 +722,7 @@ class RobertaPreTrainedModel(PreTrainedModel):
                 _a = j
             if ".lora_q_b.weight" in i:
                 _b = j
-                _q.data += (_a.data.T @ _b.data.T).T
+                _q.data += _b.data @ _a.data
 
             if ".value.weight" in i:
                 _v = j
@@ -729,7 +730,7 @@ class RobertaPreTrainedModel(PreTrainedModel):
                 _a = j
             if ".lora_v_b.weight" in i:
                 _b = j
-                _v.data += (_a.data.T @ _b.data.T).T
+                _v.data += _b.data @ _a.data
         self._init_lora()
 
     def _set_gradient_checkpointing(self, module, value=False):
