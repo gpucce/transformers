@@ -18,28 +18,29 @@ export RANK=$SLURM_PROCID
 master_addr=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
 export MASTER_ADDR=$master_addr
 
-printf -v date '%(%Y-%m-%d_%H-%M-%S)T' -1
-date="roberta_regular_finetune/${date}"
-
 export WANDB_MODE=offline
-printf -v date '%(%Y-%m-%d_%H-%M-%S)T' -1
 
-srun --cpu_bind=v --accel-bind=gn python transformers/examples/pytorch/text-classification/run_glue.py \
-    --task_name "sst2" \
+export task="mnli"
+printf -v date '%(%Y-%m-%d_%H-%M-%S)T' -1
+export date="roberta_relora_${date}_${task}"
+
+cd /home/users/giovannipuccetti/Repos/relora
+srun --cpu_bind=v --accel-bind=gn python examples/pytorch/text-classification/run_glue.py \
+    --task_name $task \
     --model_name "roberta-base" \
     --do_lora true \
     --lora_r 8 \
     --lora_alpha 8 \
     --num_train_epochs 60 \
     --learning_rate 1.e-5 \
-    --run_name "roberta_relora_${date}" \
+    --run_name ${date} \
     --per_device_train_batch_size 32 \
     --do_train \
     --do_eval \
     --evaluation_strategy "epoch" \
     --logging_strategy "steps" \
     --logging_steps 1000 \
-    --output_dir "test/roberta_relora_${date}" \
+    --output_dir "test/${date}" \
     --warmup_ratio 0.06 \
     --save_total_limit 2 \
     --save_strategy "epoch" \

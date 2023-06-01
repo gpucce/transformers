@@ -22,10 +22,12 @@ import random
 import sys
 from dataclasses import dataclass, field
 from typing import Optional
+from datetime import datetime
 
 import datasets
 import evaluate
 import numpy as np
+import torch
 from datasets import load_dataset
 
 import transformers
@@ -50,6 +52,8 @@ from transformers.training_args import TrainingArguments
 from transformers.utils import check_min_version, send_example_telemetry
 from transformers.utils.versions import require_version
 
+
+THIS_TIME = datetime.now().strftime("%y-%m-%d_%H-%M-%S")
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.30.0.dev0")
@@ -156,6 +160,10 @@ class DataTrainingArguments:
         default=None,
         metadata={"help": "A csv or a json file containing the test data."},
     )
+    task_per_node: bool = field(
+        default=False,
+        metadata={"help": "choose task based on node."},
+    )
 
     def __post_init__(self):
         if self.task_name is not None:
@@ -164,6 +172,7 @@ class DataTrainingArguments:
                 raise ValueError(
                     "Unknown task, you should pick one in " + ",".join(task_to_keys.keys())
                 )
+            
         elif self.dataset_name is not None:
             pass
         elif self.train_file is None or self.validation_file is None:
@@ -252,28 +261,51 @@ class ReloraCallback(TrainerCallback):
 
         if (state.epoch > 0) and (int(state.epoch) % args.relora_epoch == 0):
             print("####################################", state.epoch)
+            random.seed(42)
+            torch.manual_seed(42)
             model._re_init_lora()
             assert (next(j for i, j in model.named_parameters() if "lora_v_b" in i) == 0).all()
 
+node_to_task = {
+    0:"run_scripts/configs/mnli_cfg.json",
+    1:"run_scripts/configs/sst2_cfg.json",
+    2:"run_scripts/configs/mrpc_cfg.json",
+    3:"run_scripts/configs/rte_cfg.json",
+    4:"run_scripts/configs/qqp_cfg.json",
+    5:"run_scripts/configs/qnli_cfg.json",
+    6:"run_scripts/configs/cola_cfg.json",
+    7:"run_scripts/configs/stsb_cfg.json",
+    8:"run_scripts/configs/wnli_cfg.json",
+}
 
 def main():
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
-
-    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments))
-    if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
-        # If we pass only one argument to the script and it's the path to a json file,
-        # let's parse it to get our arguments.
-        model_args, data_args, training_args = parser.parse_json_file(
-            json_file=os.path.abspath(sys.argv[1])
-        )
+    if len(sys.argv) == 1:
+        config_file = node_to_task[int(os.environ["SLURM_NODEID"])]
     else:
-        model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+        config_file=sys.argv[1]
+        
+    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments))
+    model_args, data_args, training_args = parser.parse_json_file(
+        json_file=os.path.abspath(config_file)
+    )
+    
+    # if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
+    #     # If we pass only one argument to the script and it's the path to a json file,
+    #     # let's parse it to get our arguments.
+    #     model_args, data_args, training_args = parser.parse_json_file(
+    #         json_file=os.path.abspath(sys.argv[1])
+    #     )
+    # else:
+    #     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
+    training_args.output_dir = training_args.output_dir + f"{THIS_TIME}_{data_args.task_name}"
+    training_args.run_name = training_args.run_name + f"_{THIS_TIME}_{data_args.task_name}"
     # Sending telemetry. Tracking the example usage helps us better allocate resources to maintain them. The
     # information sent is the one passed as arguments along with your Python/PyTorch versions.
-    send_example_telemetry("run_glue", model_args, data_args)
+
 
     # Setup logging
     logging.basicConfig(
@@ -453,9 +485,12 @@ def main():
     )
 
     if model_args.do_lora:
+        random.seed(42)
+        torch.manual_seed(42)
         model._init_lora()
 
         assert len([i for i, j in model.named_parameters() if "lora" in i and "bias" not in i]) > 0
+        assert next(j for i, j in model.named_parameters() if "lora_v_b.weight" in i).sum() == 0
 
     # Preprocessing the raw_datasets
     if data_args.task_name is not None:
@@ -605,6 +640,10 @@ def main():
         )
         optimizer = AdamW(optimizer_params, lr=training_args.learning_rate)
         optimizers = (optimizer, None)
+        
+        for n, p in model.named_parameters():
+            if not any(i in n for i in ["lora_q_b", "lora_q_a", "lora_v_b", "lora_v_a"]):
+                p.requires_grad = False
 
     # Initialize our Trainer
     trainer = Trainer(

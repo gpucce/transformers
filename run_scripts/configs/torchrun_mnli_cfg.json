@@ -1,0 +1,23 @@
+{
+    "task_name": "mnli",
+    "model_name_or_path": "roberta-base",
+    "do_lora": true,
+    "lora_r": 8,
+    "lora_alpha": 16,
+    "num_train_epochs": 30,
+    "learning_rate": 5e-4,
+    "run_name": "roberta_lora",
+    "per_device_train_batch_size": 32,
+    "do_train": true,
+    "do_eval": true,
+    "evaluation_strategy": "epoch",
+    "logging_strategy": "steps",
+    "logging_steps": 1000,
+    "output_dir": "test_specified_run/",
+    "warmup_ratio": 0.06,
+    "save_total_limit": 2,
+    "save_strategy": "epoch",
+    "disable_tqdm": true,
+    "weight_decay": 0.1,
+    "max_seq_length": 256
+}
