@@ -261,19 +261,19 @@ class ReloraCallback(TrainerCallback):
 
         if (state.epoch > 0) and (int(state.epoch) % args.relora_epoch == 0):
             print("####################################", state.epoch)
-            random.seed(42)
-            torch.manual_seed(42)
+            random.seed(args.seed)
+            torch.manual_seed(args.seed)
             model._re_init_lora()
             assert (next(j for i, j in model.named_parameters() if "lora_v_b" in i) == 0).all()
 
 node_to_task = {
     0:"run_scripts/configs/mnli_cfg.json",
     1:"run_scripts/configs/sst2_cfg.json",
-    2:"run_scripts/configs/mrpc_cfg.json",
-    3:"run_scripts/configs/rte_cfg.json",
-    4:"run_scripts/configs/qqp_cfg.json",
-    5:"run_scripts/configs/qnli_cfg.json",
-    6:"run_scripts/configs/cola_cfg.json",
+    2:"run_scripts/configs/qqp_cfg.json",
+    3:"run_scripts/configs/cola_cfg.json",
+    4:"run_scripts/configs/qnli_cfg.json",
+    5:"run_scripts/configs/mrpc_cfg.json",
+    6:"run_scripts/configs/rte_cfg.json",
     7:"run_scripts/configs/stsb_cfg.json",
     8:"run_scripts/configs/wnli_cfg.json",
 }
@@ -485,8 +485,8 @@ def main():
     )
 
     if model_args.do_lora:
-        random.seed(42)
-        torch.manual_seed(42)
+        random.seed(training_args.seed)
+        torch.manual_seed(training_args.seed)
         model._init_lora()
 
         assert len([i for i, j in model.named_parameters() if "lora" in i and "bias" not in i]) > 0
@@ -636,7 +636,7 @@ def main():
     training_args.relora_epoch = model_args.relora_epoch
     if model_args.do_lora:
         optimizer_params = (
-            j for i, j in model.named_parameters() if ("lora" in i) and ("bias" not in i)
+            j for i, j in model.named_parameters() if (("lora" in i) and ("bias" not in i)) or "classifier" in i
         )
         optimizer = AdamW(optimizer_params, lr=training_args.learning_rate)
         optimizers = (optimizer, None)
@@ -644,6 +644,8 @@ def main():
         for n, p in model.named_parameters():
             if not any(i in n for i in ["lora_q_b", "lora_q_a", "lora_v_b", "lora_v_a"]):
                 p.requires_grad = False
+            if "classifier" in n:
+                p.requires_grad = True
 
     # Initialize our Trainer
     trainer = Trainer(
